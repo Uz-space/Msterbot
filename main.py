@@ -35,7 +35,7 @@ log = logging.getLogger("deployer")
 # Konfiguratsiya
 # ---------------------------------------------------------------------------
 
-BOT_TOKEN: str  = os.getenv("MASTER_BOT_TOKEN", "8656657889:AAEr6APfPm3Ah7VeTlqyhTYNvVsN9BqLYPg")
+BOT_TOKEN: str  = os.getenv("MASTER_BOT_TOKEN", "8746130423:AAF6oOc0RDeEYzvSlu1HblzMlGtJ2WU7toc")
 BOTS_ROOT: Path = Path(os.getenv("BOTS_ROOT", "/app/user_bots"))
 PYTHON_BIN: str = os.getenv("PYTHON_BIN", sys.executable)
 
