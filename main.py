@@ -263,8 +263,9 @@ async def cb_deploy(call: CallbackQuery, state: FSMContext) -> None:
         stderr = ""
         if stderr_path.exists():
             stderr = stderr_path.read_text(errors="replace").strip()[-1000:]
+        no_err = "Noma'lum xato"
         await call.message.answer(
-            f"❌ Bot ishga tushmadi.\n\n*Xato:*\n```\n{stderr or 'Noma\\'lum xato'}\n```",
+            f"❌ Bot ishga tushmadi.\n\n*Xato:*\n```\n{stderr or no_err}\n```",
             parse_mode="Markdown",
         )
         return
