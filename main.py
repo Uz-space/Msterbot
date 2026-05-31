@@ -37,7 +37,7 @@ log = logging.getLogger("deployer")
 # Konfiguratsiya  — faqat shu qatorni o'zgartiring
 # ---------------------------------------------------------------------------
 
-MASTER_TOKEN: str = "BU_YERGA_MASTER_BOT_TOKENINI_YOZ"
+MASTER_TOKEN: str = "8656657889:AAEr6APfPm3Ah7VeTlqyhTYNvVsN9BqLYPg"
 BOTS_ROOT: Path   = Path("/app/user_bots")
 PYTHON_BIN: str   = sys.executable
 
