@@ -29,7 +29,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BOT_TOKEN: str = ["MASTER_BOT_TOKEN"]
+BOT_TOKEN: str = ["8784152224:AAFS3SGLjniq-TkzFI1MQ-kP2HDP7jwABcM"]
 BOTS_ROOT: Path = Path("/app/user_bots") 
 PYTHON_BIN: str = sys.executable
 
