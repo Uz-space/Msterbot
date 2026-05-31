@@ -30,8 +30,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BOT_TOKEN: str = ["MASTER_BOT_TOKEN"]
-BOTS_ROOT: Path = ("BOTS_ROOT", "/app/user_bots"))
-PYTHON_BIN: str = ("PYTHON_BIN", sys.executable)
+BOTS_ROOT: Path = Path("/app/user_bots") 
+PYTHON_BIN: str = sys.executable
 
 logging.basicConfig(
     level=logging.INFO,
