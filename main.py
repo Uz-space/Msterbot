@@ -228,20 +228,24 @@ async def cb_deploy(call: CallbackQuery, state: FSMContext) -> None:
         await call.message.answer(f"❌ Xato:\n`{exc}`", parse_mode="Markdown")
         return
 
-    # 1 sekund kutib, bot haqiqatan ishga tushganini tekshiramiz
-    await asyncio.sleep(1)
+    # 3 sekund kutib tekshiramiz
+    await asyncio.sleep(3)
     if proc.poll() is not None:
-        stderr = (user_dir(uid) / "stderr.log").read_text(errors="replace")[-500:]
+        stderr_path = user_dir(uid) / "stderr.log"
+        stderr = ""
+        if stderr_path.exists():
+            stderr = stderr_path.read_text(errors="replace").strip()[-800:]
         await call.message.answer(
-            f"❌ Bot ishga tushmadi. Xato:\n```\n{stderr}\n```",
-            parse_mode="Markdown",
+            f"❌ Bot ishga tushmadi\\.\n\n"
+            f"*Xato:*\n```\n{stderr or 'stderr.log bosh'}\n```",
+            parse_mode="MarkdownV2",
         )
         return
 
     await call.message.answer(
         f"🔥🚀 *Hamma narsa mukammal!*\n\n"
-        f"Botingiz serverda jonli ishga tushirildi!\n_(PID: `{proc.pid}`)_",
-        parse_mode="Markdown",
+        f"Botingiz serverda jonli ishga tushirildi\\!\n_PID: `{proc.pid}`_",
+        parse_mode="MarkdownV2",
     )
 
 
