@@ -55,24 +55,34 @@ def user_dir(user_id: int) -> Path:
     return d
 
 
-def deploy_btn() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Boshlash 🚀", callback_data="deploy")]
-    ])
+def token_file(uid: int) -> Path:
+    """Token saqlanadigan maxsus fayl."""
+    return user_dir(uid) / ".token"
 
 
-def extract_token(uid: int) -> str:
-    """Barcha fayllardan BOT_TOKEN ni qidiradi."""
+def save_token(uid: int, token: str) -> None:
+    token_file(uid).write_text(token.strip())
+    log.info("Token saqlandi | user=%s", uid)
+
+
+def load_token(uid: int) -> str:
+    """Avval .token faylidan o'qiydi, topilmasa barcha fayllardan qidiradi."""
+    tf = token_file(uid)
+    if tf.exists():
+        t = tf.read_text().strip()
+        if _TOKEN_RE.fullmatch(t):
+            return t
+
+    # Fayllar ichidan qidirish
     d = user_dir(uid)
-    for f in d.iterdir():
-        if not f.is_file():
+    for f in sorted(d.iterdir()):
+        if not f.is_file() or f.name.startswith(".token"):
             continue
         try:
             text = f.read_text(errors="replace")
         except Exception:
             continue
 
-        # .env uslubi: BOT_TOKEN=1234:ABC
         for line in text.splitlines():
             stripped = line.strip()
             if "BOT_TOKEN" in stripped and "=" in stripped:
@@ -80,29 +90,27 @@ def extract_token(uid: int) -> str:
                 if _TOKEN_RE.fullmatch(val):
                     return val
 
-        # Python uslubi: TOKEN = "...", os.environ["..."], getenv("...")
-        match = _TOKEN_RE.search(text)
-        if match:
-            return match.group()
+        m = _TOKEN_RE.search(text)
+        if m:
+            return m.group()
 
     return ""
 
 
 def patch_main_py(uid: int, token: str) -> None:
-    """
-    Foydalanuvchining main.py ichidagi barcha token
-    o'zgaruvchilarini to'g'ri qiymat bilan almashtiradi.
-    """
+    """main.py ichidagi barcha token joylarini to'g'ri token bilan almashtiradi."""
     main_path = user_dir(uid) / "main.py"
+    if not main_path.exists():
+        return
     text = main_path.read_text(errors="replace")
 
-    # = "eski_token" yoki = 'eski_token'
+    # TOKEN_VAR = "..." yoki TOKEN_VAR = '...'
     text = re.sub(
-        r'((?:MASTER_TOKEN|BOT_TOKEN|TOKEN)\s*=\s*)["\'][^"\']*["\']',
+        r'((?:MASTER_TOKEN|BOT_TOKEN|API_TOKEN|TOKEN)\s*=\s*)["\'][^"\']*["\']',
         rf'\g<1>"{token}"',
         text,
     )
-    # os.environ["..."] yoki os.environ['...']
+    # os.environ["KEY"] yoki os.environ['KEY']
     text = re.sub(
         r'os\.environ\[["\'][^"\']*["\']\]',
         f'"{token}"',
@@ -110,7 +118,7 @@ def patch_main_py(uid: int, token: str) -> None:
     )
     # os.getenv("KEY") yoki os.getenv("KEY", "default")
     text = re.sub(
-        r'os\.getenv\(["\'][^"\']*["\'](?:,\s*["\'][^"\']*["\'])?\)',
+        r'os\.getenv\(["\'][^"\']*["\'](?:\s*,\s*["\'][^"\']*["\'])?\)',
         f'"{token}"',
         text,
     )
@@ -119,17 +127,19 @@ def patch_main_py(uid: int, token: str) -> None:
     log.info("main.py patch qilindi | user=%s", uid)
 
 
-def validate(uid: int) -> tuple[bool, str]:
-    d = user_dir(uid)
-    files = {f.name for f in d.iterdir() if f.is_file()}
-    if "main.py" not in files:
-        return False, "⚠️ *main.py* topilmadi. Yuboring."
-    return True, ""
+def write_env(uid: int, token: str) -> None:
+    env_path = user_dir(uid) / ".env"
+    env_path.write_text(f"BOT_TOKEN={token}\n")
 
 
-def deploy_bot(uid: int) -> subprocess.Popen:
+def deploy_btn() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Boshlash 🚀", callback_data="deploy")]
+    ])
+
+
+def do_deploy(uid: int) -> subprocess.Popen:
     d = user_dir(uid)
-    # stderr.log ni tozalaymiz — yangi xato aniq ko'rinsin
     (d / "stderr.log").write_text("")
     proc = subprocess.Popen(
         [PYTHON_BIN, "main.py"],
@@ -196,15 +206,15 @@ async def receive_token_text(msg: Message, state: FSMContext) -> None:
     token = (msg.text or "").strip()
     if not _TOKEN_RE.fullmatch(token):
         await msg.answer(
-            "❌ Token noto'g'ri. To'g'ri ko'rinish:\n`1234567890:ABCdef...`",
+            "❌ Token noto'g'ri formatda.\nTo'g'ri ko'rinish: `1234567890:ABCdef...`",
             parse_mode="Markdown",
         )
         return
 
-    patch_main_py(msg.from_user.id, token)
+    save_token(msg.from_user.id, token)
     await state.clear()
     await msg.answer(
-        "✅ Token saqlandi! Endi *Boshlash 🚀* tugmasini bosing.",
+        "✅ Token qabul qilindi! Endi *Boshlash 🚀* tugmasini bosing.",
         parse_mode="Markdown",
         reply_markup=deploy_btn(),
     )
@@ -215,29 +225,32 @@ async def cb_deploy(call: CallbackQuery, state: FSMContext) -> None:
     uid = call.from_user.id
     await call.answer()
 
-    # main.py borligini tekshir
-    ok, err = validate(uid)
-    if not ok:
-        await call.message.answer(err, parse_mode="Markdown")
+    # 1. main.py borligini tekshir
+    if not (user_dir(uid) / "main.py").exists():
+        await call.message.answer(
+            "⚠️ *main.py* topilmadi. Yuboring.",
+            parse_mode="Markdown",
+        )
         return
 
-    # Fayllardan token qidirish va main.py ni patch qilish
-    token = extract_token(uid)
+    # 2. Token yuklash
+    token = load_token(uid)
     if not token:
         await call.message.answer(
-            "⚠️ Hech bir faylda *BOT_TOKEN* topilmadi.\n\nTokeningizni yuboring:",
+            "⚠️ Token topilmadi.\n\nBotingiz tokenini yuboring:",
             parse_mode="Markdown",
         )
         await state.set_state(Form.waiting_token)
         return
 
+    # 3. main.py patch + .env yozish
     patch_main_py(uid, token)
-    log.info("Token patch qilindi | user=%s | token=%s...%s", uid, token[:6], token[-4:])
+    write_env(uid, token)
 
     await call.message.answer("⏳ Botingiz ishga tushirilmoqda...")
 
     try:
-        proc = deploy_bot(uid)
+        proc = do_deploy(uid)
     except Exception as exc:
         log.exception("Deploy xatosi | user=%s", uid)
         await call.message.answer(f"❌ Xato:\n`{exc}`", parse_mode="Markdown")
@@ -247,9 +260,11 @@ async def cb_deploy(call: CallbackQuery, state: FSMContext) -> None:
 
     if proc.poll() is not None:
         stderr_path = user_dir(uid) / "stderr.log"
-        stderr = stderr_path.read_text(errors="replace").strip()[-1000:] if stderr_path.exists() else "Xato log topilmadi"
+        stderr = ""
+        if stderr_path.exists():
+            stderr = stderr_path.read_text(errors="replace").strip()[-1000:]
         await call.message.answer(
-            f"❌ Bot ishga tushmadi.\n\n*Xato:*\n```\n{stderr}\n```",
+            f"❌ Bot ishga tushmadi.\n\n*Xato:*\n```\n{stderr or 'Noma\\'lum xato'}\n```",
             parse_mode="Markdown",
         )
         return
